@@ -225,48 +225,112 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 const updateUserAvatar = asyncHandler(async (req, res) => {
   // here req.file because we have to only update the avatar but in register user we have to upload multiple files so req.files
   const avatarLocalPath = req.file?.path;
-  if(!avatarLocalPath){
-    throw new ApiError(400, "Avatar file is missing")
+  if (!avatarLocalPath) {
+    throw new ApiError(400, "Avatar file is missing");
   }
-  const avatar = await uploadOnCloudinary(avatarLocalPath)
-  if(!avatar.url){
-    throw new ApiError(400, "Error while uploading avatar")
+  const avatar = await uploadOnCloudinary(avatarLocalPath);
+  if (!avatar.url) {
+    throw new ApiError(400, "Error while uploading avatar");
   }
   const user = await User.findByIdAndUpdate(
     req.user?._id,
     {
-      $set:{
-        avatar : avatar.url
-      }
+      $set: {
+        avatar: avatar.url,
+      },
     },
-    {new: true}
-  ).select("-password")
+    { new: true }
+  ).select("-password");
   return res
-  .status(200)
-  .json(new ApiResponse(200, user, "Avatar updated successfully"))
+    .status(200)
+    .json(new ApiResponse(200, user, "Avatar updated successfully"));
 });
 const updateUserCoverImage = asyncHandler(async (req, res) => {
   // here req.file because we have to only update the CoverImage but in register user we have to upload multiple files so req.files
   const CoverImageLocalPath = req.file?.path;
-  if(!CoverImageLocalPath){
-    throw new ApiError(400, "CoverImage file is missing")
+  if (!CoverImageLocalPath) {
+    throw new ApiError(400, "CoverImage file is missing");
   }
-  const CoverImage = await uploadOnCloudinary(CoverImageLocalPath)
-  if(!CoverImage.url){
-    throw new ApiError(400, "Error while uploading CoverImage")
+  const CoverImage = await uploadOnCloudinary(CoverImageLocalPath);
+  if (!CoverImage.url) {
+    throw new ApiError(400, "Error while uploading CoverImage");
   }
   const user = await User.findByIdAndUpdate(
     req.user?._id,
     {
-      $set:{
-        CoverImage : CoverImage.url
-      }
+      $set: {
+        CoverImage: CoverImage.url,
+      },
     },
-    {new: true}
-  ).select("-password")
+    { new: true }
+  ).select("-password");
   return res
-  .status(200)
-  .json(new ApiResponse(200, user, "Cover Image updated successfully"))
+    .status(200)
+    .json(new ApiResponse(200, user, "Cover Image updated successfully"));
+});
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  const { username } = req.params;
+  if (!username?.trim()) {
+    throw new ApiError(400, "Username is missing");
+  }
+  const channel = await User.aggregate([
+    {
+      $match: {
+        username: username?.toLowerCase(),
+      },
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers",
+      },
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribedTo",
+      },
+    },
+    {
+      $addFields: {
+        subscribersCount: {
+          $size: "subscribers",
+        },
+        channelSubscribedToCount: {
+          $size: "subscribedTo",
+        },
+        isSubscribed: {
+          $cond: {
+            if: { $in: [req.user?._id, "subscribers.subscribe"] },
+            then: true,
+            else: false,
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        fullName: 1,
+        username: 1,
+        email: 1,
+        subscribersCount: 1,
+        channelSubscribedToCount: 1,
+        isSubscribed: 1,
+        avatar: 1,
+        coverImage: 1,
+      },
+    },
+  ]);
+  if (!channel?.length) {
+    throw new ApiError(400, "channel doesnot exist");
+  }
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "User channel fetched successfully"));
 });
 export {
   registerUser,
@@ -277,5 +341,6 @@ export {
   getCurrentUser,
   updateAccountDetails,
   updateUserAvatar,
-  updateUserCoverImage
+  updateUserCoverImage,
+  getUserChannelProfile,
 };
